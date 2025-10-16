@@ -1,9 +1,8 @@
-# Workflow to build and deploy OpenWrt packages for the PeDitXOS repository.
-# This version is designed for a two-account setup:
-# 1. BUILD runs on the Build Bot account (e.g., peditbackup) to avoid queueing.
-# 2. DEPLOY securely pushes the final artifacts to the main account's repository (e.g., peditx).
+# Workflow to build and deploy a COMPLETE OpenWrt package repository.
+# **FULL SOURCE BUILD VERSION**
+# This workflow builds the default package set for each target, plus all custom packages.
 
-name: Build and Deploy PeDitXOS OpenWrt Packages
+name: Build and Deploy PeDitXOS OpenWrt Packages (Full Source)
 
 on:
   workflow_dispatch:
@@ -22,24 +21,25 @@ jobs:
           - 'openwrt-23.05'
           - 'openwrt-22.03'
         
+        # **CORRECTED MATRIX SYNTAX**: Using a simple list of strings, which is valid.
         target_subtarget:
-          - { target: 'ath79', subtarget: 'generic' }
-          - { target: 'bcm27xx', subtarget: 'bcm2711' }
-          - { target: 'ipq40xx', subtarget: 'generic' }
-          - { target: 'ipq806x', subtarget: 'generic' }
-          - { target: 'ipq807x', subtarget: 'generic' }
-          - { target: 'lantiq', subtarget: 'xrx200' }
-          - { target: 'mediatek', subtarget: 'filogic' }
-          - { target: 'mvebu', subtarget: 'cortexa9' }
-          - { target: 'ramips', subtarget: 'mt7621' }
-          - { target: 'rockchip', subtarget: 'armv8' }
-          - { target: 'sunxi', subtarget: 'cortexa7' }
-          - { target: 'x86', subtarget: '64' }
-          - { target: 'qualcommax', subtarget: 'ipq5018' }
-          - { target: 'qualcommax', subtarget: 'ipq6018' }
-          - { target: 'qualcommax', subtarget: 'ipq8074' }
-          - { target: 'realtek', subtarget: 'generic' }
-          - { target: 'mediatek', subtarget: 'mt7622' }
+          - 'ath79/generic'
+          - 'bcm27xx/bcm2711'
+          - 'ipq40xx/generic'
+          - 'ipq806x/generic'
+          - 'ipq807x/generic'
+          - 'lantiq/xrx200'
+          - 'mediatek/filogic'
+          - 'mvebu/cortexa9'
+          - 'ramips/mt7621'
+          - 'rockchip/armv8'
+          - 'sunxi/cortexa7'
+          - 'x86/64'
+          - 'qualcommax/ipq5018'
+          - 'qualcommax/ipq6018'
+          - 'qualcommax/ipq8074'
+          - 'realtek/generic'
+          - 'mediatek/mt7622'
 
     steps:
       - name: Checkout main branch
@@ -56,8 +56,6 @@ jobs:
 
       - name: Clone custom single packages directly
         run: |
-          # These packages have a non-standard feed structure and are cloned directly into the package directory.
-          # This is the most reliable method for single-package repositories.
           git clone --depth 1 https://github.com/peditx/luci-app-themeswitch.git openwrt/package/luci-app-themeswitch
           git clone --depth 1 https://github.com/peditx/luci-theme-peditx.git openwrt/package/luci-theme-peditx
           git clone --depth 1 https://github.com/peditx/luci-theme-carbonpx.git openwrt/package/luci-theme-carbonpx
@@ -66,7 +64,6 @@ jobs:
         run: |
           cd openwrt
           
-          # Add only the compatible feeds (Passwall feeds work correctly this way)
           echo 'src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages' >> feeds.conf.default
           echo 'src-git passwall_peditx https://github.com/peditx/openwrt-passwall' >> feeds.conf.default
           echo 'src-git passwall2_peditx https://github.com/peditx/openwrt-passwall2' >> feeds.conf.default
@@ -74,23 +71,24 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           
+          # **CORRECTED LOGIC**: Parse the simple string from the matrix into two variables.
+          TARGET_MAIN="${{ matrix.target_subtarget }}"
+          TARGET=$(echo "$TARGET_MAIN" | cut -d'/' -f1)
+          SUBTARGET=$(echo "$TARGET_MAIN" | cut -d'/' -f2)
+          
+          # Set the target architecture using the parsed variables.
           cat > .config << EOF
-          CONFIG_TARGET_${{ matrix.target_subtarget.target }}=y
-          CONFIG_TARGET_${{ matrix.target_subtarget.target }}_${{ matrix.target_subtarget.subtarget }}=y
+          CONFIG_TARGET_${TARGET}=y
+          CONFIG_TARGET_${TARGET}_${SUBTARGET}=y
           EOF
           
+          # Generate the default config for the selected target
           make defconfig
           
-          cat >> .config << EOF
-          CONFIG_DEVEL=y
-          CONFIG_SIGNED_PACKAGES=y
-          CONFIG_PACKAGE_luci-app-themeswitch=y
-          CONFIG_PACKAGE_luci-theme-peditx=y
-          CONFIG_PACKAGE_luci-theme-carbonpx=y
-          CONFIG_PACKAGE_luci-app-passwall=y
-          CONFIG_PACKAGE_luci-app-passwall2=y
-          EOF
+          # Add signing option. Custom packages will be auto-selected by oldconfig.
+          echo "CONFIG_SIGNED_PACKAGES=y" >> .config
           
+          # Sync the config to include all available packages (including our custom ones)
           make oldconfig
 
       - name: Cache OpenWrt Downloads
@@ -115,25 +113,30 @@ jobs:
           path: openwrt/staging_dir/host
           key: ${{ runner.os }}-${{ matrix.openwrt_version }}-host-${{ hashFiles('openwrt/.config') }}
 
-      - name: Build the usign tool explicitly
-        # **THE ULTIMATE FIX**: Instead of relying on the generic 'tools/install',
-        # we explicitly compile and install the 'usign' tool. This guarantees it exists
-        # before the package index signing step is called.
+      - name: Build host tools (including usign)
         run: |
           cd openwrt
-          make tools/usign/install -j$(nproc) V=s
+          make tools/install -j$(nproc) V=s
 
       - name: Build packages
         run: |
           cd openwrt
+          # This command builds all packages selected in the .config (default set + custom packages)
+          make package/compile -j$(nproc) V=s
+          # This command creates the index for the packages we just built
           make package/index V=s
 
       - name: Organize packages for artifact upload
         run: |
-          mkdir -p dist/${{ matrix.openwrt_version }}/${{ matrix.target_subtarget.target }}/${{ matrix.target_subtarget.subtarget }}/packages
-          find openwrt/bin/packages -type f -name "*.ipk" -exec cp {} dist/${{ matrix.openwrt_version }}/${{ matrix.target_subtarget.target }}/${{ matrix.target_subtarget.subtarget }}/packages/ \;
-          find openwrt/bin/targets -name "Packages*" -exec cp {} dist/${{ matrix.openwrt_version }}/${{ matrix.target_subtarget.target }}/${{ matrix.target_subtarget.subtarget }}/ \;
-          cp openwrt/key-build.pub dist/${{ matrix.openwrt_version }}/
+          # **CORRECTED LOGIC**: Parse the string again for creating the directory structure.
+          TARGET_MAIN="${{ matrix.target_subtarget }}"
+          TARGET=$(echo "$TARGET_MAIN" | cut -d'/' -f1)
+          SUBTARGET=$(echo "$TARGET_MAIN" | cut -d'/' -f2)
+          
+          mkdir -p "dist/${{ matrix.openwrt_version }}/${TARGET}/${SUBTARGET}/packages"
+          find openwrt/bin/packages -type f -name "*.ipk" -exec cp {} "dist/${{ matrix.openwrt_version }}/${TARGET}/${SUBTARGET}/packages/" \;
+          find openwrt/bin/targets -name "Packages*" -exec cp {} "dist/${{ matrix.openwrt_version }}/${TARGET}/${SUBTARGET}/" \;
+          cp openwrt/key-build.pub "dist/${{ matrix.openwrt_version }}/"
           
       - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4
@@ -173,10 +176,7 @@ jobs:
       - name: Push updates to main repository
         uses: peaceiris/actions-gh-pages@v4
         with:
-          # This is the private SSH key (Deploy Key) for secure access.
           deploy_key: ${{ secrets.DEPLOY_KEY }}
-          # IMPORTANT: This pushes the results to your MAIN account's repository (Account 1).
-          # The build itself runs on Account 2 (peditbackup).
           external_repository: peditx/PeDitXOS-Repository
           publish_dir: ./dist
           publish_branch: repo
