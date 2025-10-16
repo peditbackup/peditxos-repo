@@ -54,16 +54,22 @@ jobs:
       - name: Clone OpenWrt source code
         run: git clone --depth 1 --branch ${{ matrix.openwrt_version }} https://github.com/openwrt/openwrt.git openwrt
 
+      - name: Clone custom single packages directly
+        run: |
+          # These packages have a non-standard feed structure and are cloned directly into the package directory.
+          # This is the most reliable method for single-package repositories.
+          git clone --depth 1 https://github.com/peditx/luci-app-themeswitch.git openwrt/package/luci-app-themeswitch
+          git clone --depth 1 https://github.com/peditx/luci-theme-peditx.git openwrt/package/luci-theme-peditx
+          git clone --depth 1 https://github.com/peditx/luci-theme-carbonpx.git openwrt/package/luci-theme-carbonpx
+
       - name: Add custom feeds and generate config
         run: |
           cd openwrt
           
+          # Add only the compatible feeds (Passwall feeds work correctly this way)
           echo 'src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages' >> feeds.conf.default
           echo 'src-git passwall_peditx https://github.com/peditx/openwrt-passwall' >> feeds.conf.default
           echo 'src-git passwall2_peditx https://github.com/peditx/openwrt-passwall2' >> feeds.conf.default
-          echo 'src-git themeswitch https://github.com/peditx/luci-app-themeswitch' >> feeds.conf.default
-          echo 'src-git theme_peditx https://github.com/peditx/luci-theme-peditx' >> feeds.conf.default
-          echo 'src-git theme_carbonpx https://github.com/peditx/luci-theme-carbonpx' >> feeds.conf.default
           
           ./scripts/feeds update -a
           ./scripts/feeds install -a
