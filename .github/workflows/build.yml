@@ -170,7 +170,7 @@ jobs:
           publish_dir: ./dist
           publish_branch: repo
           force_orphan: true
-          cname: repo.peditxos.ir
+          cname: downloads.peditxos.ir
 
       - name: Final Check
         run: echo "Deployment to 'peditx/PeDitXOS-Repository' branch 'repo' complete."
