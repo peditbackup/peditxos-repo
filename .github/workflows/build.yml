@@ -90,6 +90,10 @@ jobs:
           CONFIG_PACKAGE_luci-app-passwall=y
           CONFIG_PACKAGE_luci-app-passwall2=y
           EOF
+          
+          # **THE FINAL FIX**: This command synchronizes the .config file after our additions,
+          # resolving the "out of sync" warning and ensuring all dependencies (like usign) are recognized.
+          make oldconfig
 
       - name: Cache OpenWrt Downloads
         uses: actions/cache@v4
