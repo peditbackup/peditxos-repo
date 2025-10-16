@@ -122,7 +122,8 @@ jobs:
         run: |
           cd openwrt
           # This command builds all packages selected in the .config (default set + custom packages)
-          make package/compile -j$(nproc) V=s
+          # Switched to -j1 to get a clearer, non-interleaved error log if a package fails.
+          make package/compile -j1 V=s
           # This command creates the index for the packages we just built
           make package/index V=s
 
@@ -185,4 +186,3 @@ jobs:
 
       - name: Final Check
         run: echo "Deployment to 'peditx/PeDitXOS-Repository' branch 'repo' complete."
-
