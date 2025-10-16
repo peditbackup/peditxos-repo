@@ -63,12 +63,15 @@ jobs:
         run: |
           cd openwrt
           
+          echo "Adding all custom feeds for ${{ matrix.openwrt_version }}"
           echo 'src-git passwall_packages https://github.com/xiaorouji/openwrt-passwall-packages' >> feeds.conf.default
           echo 'src-git passwall_peditx https://github.com/peditx/openwrt-passwall' >> feeds.conf.default
           echo 'src-git passwall2_peditx https://github.com/peditx/openwrt-passwall2' >> feeds.conf.default
           
           ./scripts/feeds update -a
-          ./scripts/feeds install -a
+          # Use the -i flag to ignore errors from Makefiles that are incompatible with older OpenWrt versions.
+          # This allows the build to continue by processing only the compatible packages.
+          ./scripts/feeds install -a -i
           
           TARGET_MAIN="${{ matrix.target_subtarget }}"
           TARGET=$(echo "$TARGET_MAIN" | cut -d'/' -f1)
@@ -116,11 +119,11 @@ jobs:
           cd openwrt
           make toolchain/install -j$(nproc) V=s
 
-      - name: Build packages (Single-Core for Debugging)
+      - name: Build packages
         run: |
           cd openwrt
-          # Running with -j1 to get a clear error message from the first failing package
-          make package/compile -j1 V=s
+          # Restore parallel build for speed
+          make package/compile -j$(nproc) V=s
           make package/index V=s
 
       - name: Organize packages for artifact upload
