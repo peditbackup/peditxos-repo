@@ -21,7 +21,6 @@ jobs:
           - 'openwrt-23.05'
           - 'openwrt-22.03'
         
-        # **CORRECTED MATRIX SYNTAX**: Using a simple list of strings, which is valid.
         target_subtarget:
           - 'ath79/generic'
           - 'bcm27xx/bcm2711'
@@ -71,14 +70,10 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           
-          # **CORRECTED LOGIC**: Parse the simple string from the matrix into two variables.
           TARGET_MAIN="${{ matrix.target_subtarget }}"
           TARGET=$(echo "$TARGET_MAIN" | cut -d'/' -f1)
           SUBTARGET=$(echo "$TARGET_MAIN" | cut -d'/' -f2)
           
-          # Create a base config file that selects the target and tells the build
-          # system to select ALL packages as modules ('m'). This is the key
-          # to building a full repository without interactive prompts.
           cat > .config << EOF
           CONFIG_TARGET_${TARGET}=y
           CONFIG_TARGET_${TARGET}_${SUBTARGET}=y
@@ -87,8 +82,6 @@ jobs:
           CONFIG_PACKAGE_luci=y
           EOF
           
-          # 'make oldconfig' will now use the defaults we provided (all modules)
-          # and automatically generate the final, complete .config file without interaction.
           make oldconfig
 
       - name: Cache OpenWrt Downloads
@@ -123,17 +116,15 @@ jobs:
           cd openwrt
           make toolchain/install -j$(nproc) V=s
 
-      - name: Build packages
+      - name: Build packages (Single-Core for Debugging)
         run: |
           cd openwrt
-          # This command builds all packages selected in the .config (default set + custom packages)
-          make package/compile -j$(nproc) V=s
-          # This command creates the index for the packages we just built
+          # Running with -j1 to get a clear error message from the first failing package
+          make package/compile -j1 V=s
           make package/index V=s
 
       - name: Organize packages for artifact upload
         run: |
-          # **CORRECTED LOGIC**: Parse the string again for creating the directory structure.
           TARGET_MAIN="${{ matrix.target_subtarget }}"
           TARGET=$(echo "$TARGET_MAIN" | cut -d'/' -f1)
           SUBTARGET=$(echo "$TARGET_MAIN" | cut -d'/' -f2)
