@@ -91,8 +91,6 @@ jobs:
           CONFIG_PACKAGE_luci-app-passwall2=y
           EOF
           
-          # **THE FINAL FIX**: This command synchronizes the .config file after our additions,
-          # resolving the "out of sync" warning and ensuring all dependencies (like usign) are recognized.
           make oldconfig
 
       - name: Cache OpenWrt Downloads
@@ -117,10 +115,13 @@ jobs:
           path: openwrt/staging_dir/host
           key: ${{ runner.os }}-${{ matrix.openwrt_version }}-host-${{ hashFiles('openwrt/.config') }}
 
-      - name: Build host tools (usign)
+      - name: Build the usign tool explicitly
+        # **THE ULTIMATE FIX**: Instead of relying on the generic 'tools/install',
+        # we explicitly compile and install the 'usign' tool. This guarantees it exists
+        # before the package index signing step is called.
         run: |
           cd openwrt
-          make tools/install -j$(nproc) V=s
+          make tools/usign/install -j$(nproc) V=s
 
       - name: Build packages
         run: |
