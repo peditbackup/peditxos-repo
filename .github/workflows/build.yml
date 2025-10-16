@@ -76,26 +76,19 @@ jobs:
           TARGET=$(echo "$TARGET_MAIN" | cut -d'/' -f1)
           SUBTARGET=$(echo "$TARGET_MAIN" | cut -d'/' -f2)
           
-          # Set the target architecture using the parsed variables.
+          # Create a base config file that selects the target and tells the build
+          # system to select ALL packages as modules ('m'). This is the key
+          # to building a full repository without interactive prompts.
           cat > .config << EOF
           CONFIG_TARGET_${TARGET}=y
           CONFIG_TARGET_${TARGET}_${SUBTARGET}=y
-          EOF
-          
-          # Generate the default config for the selected target
-          make defconfig
-          
-          # Add custom package selections and signing options to resolve warnings
-          cat >> .config << EOF
-          CONFIG_PACKAGE_luci=y
-          CONFIG_PACKAGE_libpam=y
-          CONFIG_PACKAGE_libtirpc=y
-          CONFIG_PACKAGE_liblzma=y
-          CONFIG_PACKAGE_libnetsnmp=y
+          CONFIG_ALL_MODULES=y
           CONFIG_SIGNED_PACKAGES=y
+          CONFIG_PACKAGE_luci=y
           EOF
           
-          # Sync the config to include all available packages and their dependencies
+          # 'make oldconfig' will now use the defaults we provided (all modules)
+          # and automatically generate the final, complete .config file without interaction.
           make oldconfig
 
       - name: Cache OpenWrt Downloads
